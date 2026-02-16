@@ -1,0 +1,1906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f172a">
+<title>Ward Mission</title>
+<link rel="manifest" href="manifest.json">
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<style>
+:root {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface2: #334155;
+  --border: #475569;
+  --text: #f1f5f9;
+  --text-dim: #94a3b8;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --accent: #10b981;
+  --accent2: #f59e0b;
+  --danger: #ef4444;
+  --purple: #8b5cf6;
+  --radius: 10px;
+  --bottom-nav: 64px;
+  --header-h: 56px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+.hidden { display: none !important; }
+
+/* ===== HEADER ===== */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+}
+
+header h1 { font-size: 1.1rem; font-weight: 700; color: var(--primary); }
+
+.sync-indicator {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.sync-indicator.syncing { color: var(--primary); }
+.sync-indicator.synced { color: var(--accent); }
+.sync-indicator.error { color: var(--danger); }
+
+/* ===== BOTTOM NAV ===== */
+.bottom-nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: var(--bottom-nav);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.bottom-nav button {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.65rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 44px;
+  padding: 4px 2px;
+  transition: color 0.2s;
+}
+
+.bottom-nav button .nav-icon {
+  font-size: 1.3rem; line-height: 1;
+  width: 36px; height: 28px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s;
+}
+.bottom-nav button.active { color: var(--primary); }
+.bottom-nav button.active .nav-icon { background: rgba(59,130,246,0.15); }
+
+/* ===== DRAWER ===== */
+.drawer-backdrop {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.5); opacity: 0;
+  transition: opacity 0.3s; display: none;
+}
+.drawer-backdrop.visible { opacity: 1; pointer-events: auto; }
+.drawer-panel {
+  position: fixed; bottom: var(--bottom-nav); right: 8px; z-index: 201;
+  background: var(--surface); border-radius: 12px;
+  width: 200px; border: 1px solid var(--border);
+  transform: translateY(10px); opacity: 0; transition: transform 0.2s ease, opacity 0.2s ease;
+  padding: 8px 0; pointer-events: none;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+}
+.drawer-panel.open { transform: translateY(0); opacity: 1; pointer-events: auto; }
+.drawer-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px; min-height: 48px;
+  cursor: pointer; transition: background 0.15s;
+  color: var(--text); font-size: 0.95rem;
+}
+.drawer-item:hover { background: var(--surface2); }
+.drawer-item .drawer-icon { font-size: 1.2rem; width: 28px; text-align: center; }
+
+/* ===== PAGES ===== */
+.page {
+  display: none;
+  padding: calc(var(--header-h) + 12px) 12px calc(var(--bottom-nav) + 16px);
+  max-width: 600px;
+  margin: 0 auto;
+}
+.page.active { display: block; }
+
+/* ===== AUTH OVERLAY ===== */
+.auth-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 24px; text-align: center;
+}
+.auth-overlay h1 { font-size: 1.6rem; margin-bottom: 8px; }
+.auth-overlay p { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 24px; max-width: 340px; }
+.google-sign-in-btn {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 24px; background: #fff; color: #333;
+  border: none; border-radius: 8px;
+  font-size: 0.9rem; font-weight: 600;
+  cursor: pointer; transition: box-shadow 0.2s;
+}
+.google-sign-in-btn:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+.google-sign-in-btn svg { width: 20px; height: 20px; }
+.auth-loading { color: var(--text-dim); font-size: 0.85rem; }
+
+/* ===== TOAST ===== */
+.toast {
+  position: fixed;
+  bottom: calc(var(--bottom-nav) + 16px);
+  left: 50%; transform: translateX(-50%);
+  background: var(--accent); color: white;
+  padding: 10px 24px; border-radius: 8px;
+  font-size: 0.85rem; font-weight: 600;
+  z-index: 500; opacity: 0;
+  transition: opacity 0.3s; pointer-events: none;
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; }
+
+/* ===== MODAL ===== */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 300;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 0;
+}
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px 16px 0 0;
+  padding: 20px;
+  max-width: 600px; width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.modal h2 { margin-bottom: 16px; font-size: 1.15rem; }
+.modal-actions {
+  display: flex; gap: 8px;
+  margin-top: 16px; justify-content: flex-end;
+}
+
+/* ===== BUTTONS ===== */
+.btn {
+  padding: 10px 20px; border: none; border-radius: 8px;
+  font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; min-height: 44px;
+  transition: background 0.2s, opacity 0.2s;
+}
+.btn-primary { background: var(--primary); color: white; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-danger { background: var(--danger); color: white; }
+.btn-outline {
+  background: transparent; color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+.btn-outline:hover { background: var(--surface2); }
+.btn-sm { padding: 6px 14px; font-size: 0.8rem; min-height: 36px; }
+.btn-icon {
+  background: none; border: none; color: var(--text-dim);
+  width: 40px; height: 40px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 1.1rem;
+}
+.btn-icon:hover { background: var(--surface2); }
+
+/* ===== FORM ===== */
+.form-group { margin-bottom: 14px; }
+.form-group label {
+  display: block; font-size: 0.78rem; font-weight: 600;
+  color: var(--text-dim); margin-bottom: 4px; text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.form-group input, .form-group select, .form-group textarea {
+  width: 100%; padding: 10px 12px;
+  background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+  font-size: 0.9rem;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+  outline: none; border-color: var(--primary);
+}
+.form-group textarea { resize: vertical; min-height: 80px; font-family: inherit; }
+
+/* ===== CARDS ===== */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px;
+  margin-bottom: 10px;
+}
+
+/* ===== SEARCH BAR ===== */
+.search-bar {
+  display: flex; gap: 8px; margin-bottom: 12px;
+}
+.search-bar input {
+  flex: 1; padding: 10px 12px;
+  background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+  font-size: 0.9rem;
+}
+.search-bar input:focus { outline: none; border-color: var(--primary); }
+
+/* ===== TAB BAR ===== */
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+  overflow-x: auto;
+}
+.tab-btn {
+  flex: 1; padding: 10px 8px;
+  background: none; border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--text-dim);
+  font-size: 0.8rem; font-weight: 500;
+  cursor: pointer; white-space: nowrap;
+  min-height: 44px; transition: all 0.2s;
+}
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+/* ===== EMPTY STATE ===== */
+.empty-state {
+  text-align: center; padding: 40px 20px;
+  color: var(--text-dim);
+}
+.empty-state .empty-icon { font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5; }
+.empty-state p { font-size: 0.85rem; }
+
+/* ===== FAB ===== */
+.fab {
+  position: fixed;
+  bottom: calc(var(--bottom-nav) + 16px);
+  right: 16px;
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white; border: none;
+  font-size: 1.6rem; font-weight: 300;
+  cursor: pointer; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px rgba(59,130,246,0.4);
+  transition: background 0.2s, transform 0.15s;
+}
+.fab:hover { background: var(--primary-hover); }
+.fab:active { transform: scale(0.93); }
+
+/* ===== TAG CHIPS ===== */
+.tag-chip {
+  display: inline-flex; align-items: center;
+  padding: 4px 10px; border-radius: 12px;
+  font-size: 0.72rem; font-weight: 600;
+  background: var(--surface2); color: var(--text-dim);
+  border: 1px solid var(--border);
+  cursor: pointer; transition: all 0.15s;
+  white-space: nowrap;
+}
+.tag-chip.selected {
+  background: rgba(59,130,246,0.2); color: var(--primary);
+  border-color: var(--primary);
+}
+.tag-chip .tag-remove {
+  margin-left: 4px; font-size: 0.85rem; opacity: 0.6;
+  cursor: pointer;
+}
+.tag-chip .tag-remove:hover { opacity: 1; }
+
+.tag-filter-bar {
+  display: flex; gap: 6px; overflow-x: auto;
+  padding-bottom: 8px; margin-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.tag-filter-bar::-webkit-scrollbar { display: none; }
+
+/* ===== NOTE CARD ===== */
+.note-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+  margin-bottom: 8px; cursor: pointer;
+  transition: border-color 0.15s;
+}
+.note-card:active { border-color: var(--primary); }
+.note-card.pinned { border-left: 3px solid var(--accent2); }
+.note-card .note-title {
+  font-size: 0.95rem; font-weight: 600;
+  margin-bottom: 4px;
+  display: flex; align-items: center; gap: 6px;
+}
+.note-card .note-title .pin-icon { color: var(--accent2); font-size: 0.8rem; }
+.note-card .note-preview {
+  font-size: 0.8rem; color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical; line-height: 1.4;
+  margin-bottom: 8px;
+}
+.note-card .note-meta {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+}
+.note-card .note-date {
+  font-size: 0.7rem; color: var(--text-dim); opacity: 0.7;
+}
+.note-card .note-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.note-card .note-person-link {
+  font-size: 0.7rem; color: var(--primary); opacity: 0.8;
+}
+
+/* ===== NOTE EDITOR ===== */
+.note-toolbar {
+  display: flex; gap: 4px; padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px; flex-wrap: wrap;
+}
+.note-toolbar button {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 6px;
+  width: 36px; height: 36px;
+  font-size: 0.9rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.note-toolbar button:hover { background: var(--border); }
+.note-toolbar button.active { background: rgba(59,130,246,0.2); border-color: var(--primary); }
+.note-editor {
+  min-height: 200px; padding: 12px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text);
+  font-size: 0.9rem; line-height: 1.6;
+  outline: none; overflow-y: auto;
+  max-height: 40vh;
+}
+.note-editor:focus { border-color: var(--primary); }
+.note-editor ul, .note-editor ol { padding-left: 20px; }
+
+/* ===== TAG SELECTOR ===== */
+.tag-selector {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 4px;
+}
+.tag-selector .tag-chip { font-size: 0.75rem; }
+.tag-add-row {
+  display: flex; gap: 6px; margin-top: 6px;
+}
+.tag-add-row input {
+  flex: 1; padding: 6px 10px;
+  background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  font-size: 0.8rem;
+}
+.tag-add-row button {
+  padding: 6px 12px; background: var(--primary);
+  color: white; border: none; border-radius: 6px;
+  font-size: 0.8rem; font-weight: 600; cursor: pointer;
+}
+
+/* ===== PERSON CARD ===== */
+.person-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 14px;
+  margin-bottom: 8px; cursor: pointer;
+  display: flex; align-items: center; gap: 12px;
+  transition: border-color 0.15s;
+}
+.person-card:active { border-color: var(--primary); }
+.person-avatar {
+  width: 42px; height: 42px; border-radius: 50%;
+  background: var(--primary); color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.9rem; font-weight: 700;
+  flex-shrink: 0;
+}
+.person-info { flex: 1; min-width: 0; }
+.person-info .person-name {
+  font-size: 0.9rem; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.person-info .person-detail {
+  font-size: 0.75rem; color: var(--text-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.category-badge {
+  padding: 3px 8px; border-radius: 10px;
+  font-size: 0.65rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.3px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.category-badge.cat-ministering { background: rgba(59,130,246,0.15); color: var(--primary); }
+.category-badge.cat-ward_missionaries { background: rgba(16,185,129,0.15); color: var(--accent); }
+.category-badge.cat-ward_council { background: rgba(139,92,246,0.15); color: var(--purple); }
+.category-badge.cat-members { background: rgba(245,158,11,0.15); color: var(--accent2); }
+.category-badge.cat-friends { background: rgba(239,68,68,0.15); color: var(--danger); }
+
+/* ===== ORDINANCE CARD ===== */
+.ordinance-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius); padding: 14px 16px;
+  margin-bottom: 8px; cursor: pointer;
+  transition: border-color 0.15s;
+}
+.ordinance-card:active { border-color: var(--primary); }
+.ordinance-card .ord-name { font-size: 0.95rem; font-weight: 600; margin-bottom: 2px; }
+.ordinance-card .ord-goal {
+  font-size: 0.8rem; color: var(--accent);
+  font-weight: 600; margin-bottom: 4px;
+}
+.ordinance-card .ord-notes {
+  font-size: 0.78rem; color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ===== STATS GRID ===== */
+.stats-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px; margin-bottom: 16px;
+}
+.stat-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px;
+  text-align: center;
+}
+.stat-card .stat-value {
+  font-size: 1.8rem; font-weight: 700;
+  color: var(--primary); line-height: 1;
+  margin-bottom: 4px;
+}
+.stat-card .stat-label {
+  font-size: 0.72rem; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.3px;
+}
+
+/* ===== SETTINGS ===== */
+.settings-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px;
+  margin-bottom: 12px;
+}
+.settings-card h3 {
+  font-size: 0.9rem; font-weight: 600;
+  margin-bottom: 12px; color: var(--text);
+}
+.account-row {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 12px;
+}
+.account-photo {
+  width: 44px; height: 44px; border-radius: 50%;
+}
+.account-info .acc-name { font-size: 0.9rem; font-weight: 600; }
+.account-info .acc-email { font-size: 0.75rem; color: var(--text-dim); }
+
+.tag-manage-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+
+/* ===== PERSON DETAIL ===== */
+.person-detail-header {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 16px;
+}
+.person-detail-avatar {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--primary); color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; font-weight: 700; flex-shrink: 0;
+}
+.person-detail-info .pd-name { font-size: 1.1rem; font-weight: 700; }
+.person-detail-info .pd-category { font-size: 0.8rem; color: var(--text-dim); }
+
+.person-contact-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.person-contact-row:last-child { border-bottom: none; }
+.person-contact-row .contact-icon { font-size: 1rem; width: 28px; text-align: center; }
+.person-contact-row a {
+  color: var(--primary); text-decoration: none;
+  font-size: 0.85rem;
+}
+.person-contact-row span { color: var(--text-dim); font-size: 0.85rem; }
+
+.person-section-title {
+  font-size: 0.78rem; font-weight: 600;
+  color: var(--text-dim); text-transform: uppercase;
+  letter-spacing: 0.3px; margin: 16px 0 8px;
+}
+
+.person-notes-text {
+  font-size: 0.85rem; color: var(--text);
+  line-height: 1.5; white-space: pre-wrap;
+}
+
+.linked-note-mini {
+  background: var(--surface2); border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 6px;
+  cursor: pointer; transition: border-color 0.15s;
+  border: 1px solid transparent;
+}
+.linked-note-mini:active { border-color: var(--primary); }
+.linked-note-mini .ln-title { font-size: 0.82rem; font-weight: 600; }
+.linked-note-mini .ln-preview { font-size: 0.75rem; color: var(--text-dim); }
+
+/* ===== CONFIRM DIALOG ===== */
+.confirm-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 400;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.confirm-box {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 24px;
+  max-width: 340px; width: 100%;
+  text-align: center;
+}
+.confirm-box p { margin-bottom: 16px; font-size: 0.9rem; }
+.confirm-box .confirm-actions { display: flex; gap: 8px; justify-content: center; }
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* ===== SECTION TITLE ===== */
+.section-title {
+  font-size: 0.85rem; font-weight: 700;
+  color: var(--text); margin-bottom: 8px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.section-title .see-all {
+  font-size: 0.75rem; color: var(--primary);
+  cursor: pointer; font-weight: 600;
+}
+
+/* ===== HOME RECENT LIST ===== */
+.home-recent-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px;
+  margin-bottom: 6px; cursor: pointer;
+  transition: border-color 0.15s;
+}
+.home-recent-item:active { border-color: var(--primary); }
+.home-recent-item .hri-icon { font-size: 1rem; opacity: 0.6; }
+.home-recent-item .hri-text {
+  flex: 1; font-size: 0.82rem; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.home-recent-item .hri-date { font-size: 0.7rem; color: var(--text-dim); }
+
+@media (max-width: 380px) {
+  .stats-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .stat-card .stat-value { font-size: 1.5rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== AUTH OVERLAY ===== -->
+<div class="auth-overlay" id="authOverlay">
+  <h1>Ward Mission</h1>
+  <p>Organize ward ministry work — notes, people, and ordinance goals.</p>
+  <button class="google-sign-in-btn" id="googleSignInBtn">
+    <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+    Sign in with Google
+  </button>
+  <p id="authError" style="color:var(--danger);font-size:0.8rem;margin-top:12px;" class="hidden"></p>
+  <p class="auth-loading hidden" id="authLoading">Signing in...</p>
+</div>
+
+<!-- ===== HEADER ===== -->
+<header>
+  <h1>Ward Mission</h1>
+  <span class="sync-indicator" id="syncStatus"></span>
+</header>
+
+<!-- ===== TOAST ===== -->
+<div class="toast" id="toast"></div>
+
+<!-- ===== HOME PAGE ===== -->
+<div class="page active" id="page-home">
+  <div class="stats-grid" id="homeStats"></div>
+  <div class="section-title">
+    <span>Recent Notes</span>
+    <span class="see-all" onclick="switchPage('notes')">See All</span>
+  </div>
+  <div id="homeRecentNotes"></div>
+  <div class="section-title" style="margin-top:16px">
+    <span>Ordinance Goals</span>
+    <span class="see-all" onclick="switchPage('ordinances')">See All</span>
+  </div>
+  <div id="homeOrdinances"></div>
+</div>
+
+<!-- ===== NOTES PAGE ===== -->
+<div class="page" id="page-notes">
+  <div class="search-bar">
+    <input type="text" id="notesSearch" placeholder="Search notes..." oninput="renderNotesList()">
+  </div>
+  <div class="tag-filter-bar" id="notesTagFilter"></div>
+  <div id="notesList"></div>
+</div>
+
+<!-- ===== PEOPLE PAGE ===== -->
+<div class="page" id="page-people">
+  <div class="search-bar">
+    <input type="text" id="peopleSearch" placeholder="Search people..." oninput="renderPeopleList()">
+  </div>
+  <div class="tab-bar" id="peopleTabs">
+    <button class="tab-btn active" data-cat="all" onclick="setPeopleCategory('all')">All</button>
+    <button class="tab-btn" data-cat="ministering" onclick="setPeopleCategory('ministering')">Ministering</button>
+    <button class="tab-btn" data-cat="ward_missionaries" onclick="setPeopleCategory('ward_missionaries')">Missionaries</button>
+    <button class="tab-btn" data-cat="ward_council" onclick="setPeopleCategory('ward_council')">Council</button>
+    <button class="tab-btn" data-cat="members" onclick="setPeopleCategory('members')">Members</button>
+    <button class="tab-btn" data-cat="friends" onclick="setPeopleCategory('friends')">Friends</button>
+  </div>
+  <div id="peopleList"></div>
+</div>
+
+<!-- ===== ORDINANCES PAGE ===== -->
+<div class="page" id="page-ordinances">
+  <div id="ordinancesList"></div>
+</div>
+
+<!-- ===== SETTINGS PAGE ===== -->
+<div class="page" id="page-settings">
+  <!-- Account -->
+  <div class="settings-card">
+    <h3>Account</h3>
+    <div class="account-row">
+      <img class="account-photo" id="accountPhoto" src="" style="display:none">
+      <div class="account-info">
+        <div class="acc-name" id="accountName">User</div>
+        <div class="acc-email" id="accountEmail"></div>
+      </div>
+    </div>
+    <button class="btn btn-outline btn-sm" id="signOutBtn">Sign Out</button>
+  </div>
+
+  <!-- Tag Management -->
+  <div class="settings-card">
+    <h3>Manage Tags</h3>
+    <div class="tag-manage-list" id="tagManageList"></div>
+    <div class="tag-add-row">
+      <input type="text" id="newTagInput" placeholder="New tag name..." maxlength="30">
+      <button onclick="addCustomTag()">Add</button>
+    </div>
+  </div>
+
+  <!-- Data -->
+  <div class="settings-card">
+    <h3>Data</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-outline btn-sm" onclick="exportData()">Export JSON</button>
+      <label class="btn btn-outline btn-sm" style="display:inline-flex;align-items:center;cursor:pointer;">
+        Import JSON
+        <input type="file" accept=".json" style="display:none" onchange="importData(event)">
+      </label>
+    </div>
+    <button class="btn btn-danger btn-sm" style="margin-top:12px" onclick="clearAllData()">Clear All Data</button>
+  </div>
+</div>
+
+<!-- ===== NOTE EDITOR MODAL ===== -->
+<div class="modal-overlay hidden" id="noteEditorModal" onclick="closeNoteEditorBackdrop(event)">
+  <div class="modal">
+    <h2 id="noteEditorTitle">New Note</h2>
+    <div class="form-group">
+      <label>Title</label>
+      <input type="text" id="noteEditTitle" placeholder="Note title..." maxlength="200">
+    </div>
+    <div class="form-group">
+      <label>Content</label>
+      <div class="note-toolbar">
+        <button onclick="execFmt('bold')" title="Bold"><b>B</b></button>
+        <button onclick="execFmt('italic')" title="Italic"><i>I</i></button>
+        <button onclick="execFmt('insertUnorderedList')" title="Bullet list">&#8226;</button>
+        <button onclick="execFmt('insertOrderedList')" title="Numbered list">1.</button>
+      </div>
+      <div class="note-editor" id="noteEditBody" contenteditable="true"></div>
+    </div>
+    <div class="form-group">
+      <label>Tags</label>
+      <div class="tag-selector" id="noteTagSelector"></div>
+    </div>
+    <div class="form-group">
+      <label>Linked Person</label>
+      <select id="noteEditPerson">
+        <option value="">None</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeNoteEditor()">Cancel</button>
+      <button class="btn btn-danger hidden" id="noteDeleteBtn" onclick="deleteNote()">Delete</button>
+      <button class="btn btn-outline hidden" id="notePinBtn" onclick="toggleNotePin()">Pin</button>
+      <button class="btn btn-primary" onclick="saveNote()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PERSON EDITOR MODAL ===== -->
+<div class="modal-overlay hidden" id="personEditorModal" onclick="closePersonEditorBackdrop(event)">
+  <div class="modal">
+    <h2 id="personEditorTitle">New Person</h2>
+    <div class="form-group">
+      <label>Name</label>
+      <input type="text" id="personEditName" placeholder="Full name..." maxlength="100">
+    </div>
+    <div class="form-group">
+      <label>Phone</label>
+      <input type="tel" id="personEditPhone" placeholder="Phone number...">
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="personEditEmail" placeholder="Email address...">
+    </div>
+    <div class="form-group">
+      <label>Category</label>
+      <select id="personEditCategory">
+        <option value="ministering">Ministering</option>
+        <option value="ward_missionaries">Ward Missionaries</option>
+        <option value="ward_council">Ward Council</option>
+        <option value="members">Members</option>
+        <option value="friends">Friends</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Role</label>
+      <input type="text" id="personEditRole" placeholder="e.g. Elders Quorum President..." maxlength="100">
+    </div>
+    <div class="form-group">
+      <label>Notes</label>
+      <textarea id="personEditNotes" placeholder="Personal notes..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>Ordinance Goal</label>
+      <select id="personEditOrdinance">
+        <option value="">None</option>
+        <option value="baptism">Baptism</option>
+        <option value="confirmation">Confirmation</option>
+        <option value="aaronic_priesthood">Aaronic Priesthood</option>
+        <option value="melchizedek_priesthood">Melchizedek Priesthood</option>
+        <option value="temple_endowment">Temple Endowment</option>
+        <option value="temple_sealing">Temple Sealing</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Ordinance Notes</label>
+      <textarea id="personEditOrdinanceNotes" placeholder="Progress notes, target date..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closePersonEditor()">Cancel</button>
+      <button class="btn btn-danger hidden" id="personDeleteBtn" onclick="deletePerson()">Delete</button>
+      <button class="btn btn-primary" onclick="savePerson()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PERSON DETAIL MODAL ===== -->
+<div class="modal-overlay hidden" id="personDetailModal" onclick="closePersonDetailBackdrop(event)">
+  <div class="modal">
+    <div id="personDetailContent"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closePersonDetail()">Close</button>
+      <button class="btn btn-primary" id="personDetailEditBtn">Edit</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CONFIRM DIALOG ===== -->
+<div class="confirm-overlay hidden" id="confirmDialog">
+  <div class="confirm-box">
+    <p id="confirmMessage"></p>
+    <div class="confirm-actions">
+      <button class="btn btn-outline btn-sm" onclick="confirmResolve(false)">Cancel</button>
+      <button class="btn btn-danger btn-sm" onclick="confirmResolve(true)">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== FAB (Notes + People pages) ===== -->
+<button class="fab hidden" id="fab" onclick="fabAction()">+</button>
+
+<!-- ===== BOTTOM NAV ===== -->
+<nav class="bottom-nav">
+  <button data-page="home" onclick="switchPage('home')">
+    <span class="nav-icon">&#9750;</span>
+    <span>Home</span>
+  </button>
+  <button data-page="notes" onclick="switchPage('notes')">
+    <span class="nav-icon">&#9998;</span>
+    <span>Notes</span>
+  </button>
+  <button data-page="people" onclick="switchPage('people')">
+    <span class="nav-icon">&#9787;</span>
+    <span>People</span>
+  </button>
+  <button data-page="ordinances" onclick="switchPage('ordinances')">
+    <span class="nav-icon">&#9733;</span>
+    <span>Goals</span>
+  </button>
+  <button data-page="more" onclick="toggleDrawer()">
+    <span class="nav-icon">&#8943;</span>
+    <span>More</span>
+  </button>
+</nav>
+
+<!-- ===== DRAWER ===== -->
+<div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawer()"></div>
+<div class="drawer-panel" id="drawerPanel">
+  <div class="drawer-item" data-page="settings" onclick="switchPage('settings');closeDrawer();">
+    <span class="drawer-icon">&#9881;</span>
+    <span>Settings</span>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// FIREBASE INIT
+// ================================================================
+firebase.initializeApp({
+  apiKey: "AIzaSyAO_aG9vePJi1Lz7iBOvEJJwn4esysktyA",
+  authDomain: "ward-mission-2b682.firebaseapp.com",
+  projectId: "ward-mission-2b682",
+  storageBucket: "ward-mission-2b682.firebasestorage.app",
+  messagingSenderId: "10878347336",
+  appId: "1:10878347336:web:221fbc5e5923d83657507d"
+});
+
+const auth = firebase.auth();
+const db = firebase.firestore();
+db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+
+let currentUser = null;
+let firestoreSyncEnabled = false;
+let syncDebounceTimers = {};
+
+// ================================================================
+// DATA STORE
+// ================================================================
+const NOTES_KEY = 'wm_notes';
+const PEOPLE_KEY = 'wm_people';
+const SETTINGS_KEY = 'wm_settings';
+
+function loadNotes() {
+  try {
+    const raw = localStorage.getItem(NOTES_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return {};
+}
+
+function loadPeople() {
+  try {
+    const raw = localStorage.getItem(PEOPLE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return {};
+}
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return { name: '', customTags: ['meeting', 'visit', 'follow-up', 'lesson', 'goal', 'prayer'] };
+}
+
+function saveNotes() {
+  localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+  syncToFirestore('notes', notes);
+}
+
+function savePeople() {
+  localStorage.setItem(PEOPLE_KEY, JSON.stringify(people));
+  syncToFirestore('people', people);
+}
+
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(wmSettings));
+  syncToFirestore('settings', wmSettings);
+}
+
+function syncToFirestore(docName, payload) {
+  if (!firestoreSyncEnabled || !currentUser) return;
+  updateSyncStatus('syncing');
+  clearTimeout(syncDebounceTimers[docName]);
+  syncDebounceTimers[docName] = setTimeout(() => {
+    const docRef = db.collection('users').doc(currentUser.uid).collection('data').doc(docName);
+    docRef.set(JSON.parse(JSON.stringify(payload))).then(() => {
+      updateSyncStatus('synced');
+    }).catch(err => {
+      console.error('Firestore sync error:', err);
+      updateSyncStatus('error');
+    });
+  }, 500);
+}
+
+function updateSyncStatus(status) {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  el.className = 'sync-indicator ' + status;
+  if (status === 'syncing') el.textContent = 'Syncing...';
+  else if (status === 'synced') el.textContent = 'Synced';
+  else if (status === 'error') el.textContent = 'Sync error';
+}
+
+async function loadFromFirestore(uid) {
+  try {
+    const notesDoc = await db.collection('users').doc(uid).collection('data').doc('notes').get();
+    const peopleDoc = await db.collection('users').doc(uid).collection('data').doc('people').get();
+    const settingsDoc = await db.collection('users').doc(uid).collection('data').doc('settings').get();
+
+    let loaded = false;
+
+    if (notesDoc.exists) {
+      notes = notesDoc.data();
+      localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+      loaded = true;
+    } else {
+      const localNotes = loadNotes();
+      if (Object.keys(localNotes).length > 0) {
+        await db.collection('users').doc(uid).collection('data').doc('notes').set(JSON.parse(JSON.stringify(localNotes)));
+        notes = localNotes;
+      }
+    }
+
+    if (peopleDoc.exists) {
+      people = peopleDoc.data();
+      localStorage.setItem(PEOPLE_KEY, JSON.stringify(people));
+      loaded = true;
+    } else {
+      const localPeople = loadPeople();
+      if (Object.keys(localPeople).length > 0) {
+        await db.collection('users').doc(uid).collection('data').doc('people').set(JSON.parse(JSON.stringify(localPeople)));
+        people = localPeople;
+      }
+    }
+
+    if (settingsDoc.exists) {
+      wmSettings = settingsDoc.data();
+      if (!wmSettings.customTags) wmSettings.customTags = ['meeting', 'visit', 'follow-up', 'lesson', 'goal', 'prayer'];
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(wmSettings));
+    } else {
+      const localSettings = loadSettings();
+      if (localSettings.name || (localSettings.customTags && localSettings.customTags.length > 6)) {
+        await db.collection('users').doc(uid).collection('data').doc('settings').set(JSON.parse(JSON.stringify(localSettings)));
+      }
+      wmSettings = localSettings;
+    }
+
+    return loaded ? 'loaded' : 'empty';
+  } catch(err) {
+    console.error('Firestore load error:', err);
+    return 'error';
+  }
+}
+
+let notes = loadNotes();
+let people = loadPeople();
+let wmSettings = loadSettings();
+
+// ================================================================
+// UTILITIES
+// ================================================================
+function generateId(prefix) {
+  return prefix + '_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function formatDate(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d)) return dateStr;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatDateShort(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d)) return dateStr;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function timeAgo(isoStr) {
+  const now = Date.now();
+  const then = new Date(isoStr).getTime();
+  const diff = now - then;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return days + 'd ago';
+  return formatDateShort(isoStr);
+}
+
+function stripHtml(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || '';
+}
+
+function getInitials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+const CATEGORY_LABELS = {
+  ministering: 'Ministering',
+  ward_missionaries: 'Missionaries',
+  ward_council: 'Council',
+  members: 'Members',
+  friends: 'Friends'
+};
+
+const ORDINANCE_LABELS = {
+  baptism: 'Baptism',
+  confirmation: 'Confirmation',
+  aaronic_priesthood: 'Aaronic Priesthood',
+  melchizedek_priesthood: 'Melchizedek Priesthood',
+  temple_endowment: 'Temple Endowment',
+  temple_sealing: 'Temple Sealing',
+  other: 'Other'
+};
+
+// ================================================================
+// CONFIRM DIALOG
+// ================================================================
+let confirmResolveFn = null;
+
+function showConfirm(message) {
+  return new Promise(resolve => {
+    confirmResolveFn = resolve;
+    document.getElementById('confirmMessage').textContent = message;
+    document.getElementById('confirmDialog').classList.remove('hidden');
+  });
+}
+
+function confirmResolve(val) {
+  document.getElementById('confirmDialog').classList.add('hidden');
+  if (confirmResolveFn) confirmResolveFn(val);
+  confirmResolveFn = null;
+}
+
+// ================================================================
+// NAVIGATION
+// ================================================================
+let currentPage = 'home';
+let currentPeopleCategory = 'all';
+
+function switchPage(page) {
+  currentPage = page;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const el = document.getElementById('page-' + page);
+  if (el) el.classList.add('active');
+
+  document.querySelectorAll('.bottom-nav button').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-page') === page);
+  });
+
+  // Show FAB only on notes and people pages
+  const fab = document.getElementById('fab');
+  if (page === 'notes' || page === 'people') {
+    fab.classList.remove('hidden');
+  } else {
+    fab.classList.add('hidden');
+  }
+
+  // Render page content
+  if (page === 'home') renderHome();
+  else if (page === 'notes') renderNotesList();
+  else if (page === 'people') renderPeopleList();
+  else if (page === 'ordinances') renderOrdinancesList();
+  else if (page === 'settings') renderSettings();
+
+  closeDrawer();
+}
+
+function fabAction() {
+  if (currentPage === 'notes') openNoteEditor();
+  else if (currentPage === 'people') openPersonEditor();
+}
+
+// ================================================================
+// DRAWER
+// ================================================================
+let drawerOpen = false;
+
+function toggleDrawer() {
+  drawerOpen = !drawerOpen;
+  const bd = document.getElementById('drawerBackdrop');
+  const panel = document.getElementById('drawerPanel');
+  if (drawerOpen) {
+    bd.style.display = 'block';
+    requestAnimationFrame(() => {
+      bd.classList.add('visible');
+      panel.classList.add('open');
+    });
+  } else {
+    closeDrawer();
+  }
+}
+
+function closeDrawer() {
+  drawerOpen = false;
+  const bd = document.getElementById('drawerBackdrop');
+  const panel = document.getElementById('drawerPanel');
+  bd.classList.remove('visible');
+  panel.classList.remove('open');
+  setTimeout(() => { bd.style.display = 'none'; }, 300);
+}
+
+// ================================================================
+// NOTES — LIST & FILTER
+// ================================================================
+let activeTagFilters = [];
+
+function getAllTags() {
+  const tags = new Set(wmSettings.customTags || []);
+  Object.values(notes).forEach(n => {
+    if (n.tags) n.tags.forEach(t => tags.add(t));
+  });
+  return [...tags].sort();
+}
+
+function renderNotesTagFilter() {
+  const bar = document.getElementById('notesTagFilter');
+  const allTags = getAllTags();
+  if (allTags.length === 0) { bar.innerHTML = ''; return; }
+
+  bar.innerHTML = allTags.map(t => {
+    const sel = activeTagFilters.includes(t) ? ' selected' : '';
+    return '<span class="tag-chip' + sel + '" onclick="toggleTagFilter(\'' + escHtml(t) + '\')">' + escHtml(t) + '</span>';
+  }).join('');
+}
+
+function toggleTagFilter(tag) {
+  const idx = activeTagFilters.indexOf(tag);
+  if (idx >= 0) activeTagFilters.splice(idx, 1);
+  else activeTagFilters.push(tag);
+  renderNotesList();
+}
+
+function renderNotesList() {
+  renderNotesTagFilter();
+  const query = (document.getElementById('notesSearch').value || '').toLowerCase().trim();
+  const container = document.getElementById('notesList');
+
+  let noteArr = Object.values(notes).filter(n => !n.archived);
+
+  // Filter by search
+  if (query) {
+    noteArr = noteArr.filter(n =>
+      (n.title || '').toLowerCase().includes(query) ||
+      (n.bodyPlain || '').toLowerCase().includes(query)
+    );
+  }
+
+  // Filter by tags
+  if (activeTagFilters.length > 0) {
+    noteArr = noteArr.filter(n =>
+      n.tags && activeTagFilters.every(t => n.tags.includes(t))
+    );
+  }
+
+  // Sort: pinned first, then by updatedAt desc
+  noteArr.sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return new Date(b.updatedAt) - new Date(a.updatedAt);
+  });
+
+  if (noteArr.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9998;</div><p>' +
+      (query || activeTagFilters.length ? 'No matching notes' : 'No notes yet. Tap + to create one.') +
+      '</p></div>';
+    return;
+  }
+
+  container.innerHTML = noteArr.map(n => {
+    const preview = escHtml((n.bodyPlain || '').substring(0, 120));
+    const personName = n.personId && people[n.personId] ? people[n.personId].name : '';
+    const tags = (n.tags || []).map(t =>
+      '<span class="tag-chip" style="cursor:default;font-size:0.65rem;padding:2px 6px;">' + escHtml(t) + '</span>'
+    ).join('');
+    return '<div class="note-card' + (n.pinned ? ' pinned' : '') + '" onclick="openNoteEditor(\'' + n.id + '\')">' +
+      '<div class="note-title">' +
+        (n.pinned ? '<span class="pin-icon">&#128204;</span>' : '') +
+        escHtml(n.title || 'Untitled') +
+      '</div>' +
+      '<div class="note-preview">' + preview + '</div>' +
+      '<div class="note-meta">' +
+        '<div class="note-tags">' + tags + '</div>' +
+        (personName ? '<span class="note-person-link">' + escHtml(personName) + '</span>' : '') +
+        '<span class="note-date">' + timeAgo(n.updatedAt) + '</span>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ================================================================
+// NOTES — EDITOR
+// ================================================================
+let editingNoteId = null;
+
+function openNoteEditor(noteId) {
+  editingNoteId = noteId || null;
+  const modal = document.getElementById('noteEditorModal');
+  const titleEl = document.getElementById('noteEditTitle');
+  const bodyEl = document.getElementById('noteEditBody');
+  const personSel = document.getElementById('noteEditPerson');
+  const deleteBtn = document.getElementById('noteDeleteBtn');
+  const pinBtn = document.getElementById('notePinBtn');
+
+  // Populate person dropdown
+  const peopleArr = Object.values(people).filter(p => !p.archived).sort((a, b) => a.name.localeCompare(b.name));
+  personSel.innerHTML = '<option value="">None</option>' +
+    peopleArr.map(p => '<option value="' + p.id + '">' + escHtml(p.name) + '</option>').join('');
+
+  if (noteId && notes[noteId]) {
+    const n = notes[noteId];
+    document.getElementById('noteEditorTitle').textContent = 'Edit Note';
+    titleEl.value = n.title || '';
+    bodyEl.innerHTML = n.body || '';
+    personSel.value = n.personId || '';
+    deleteBtn.classList.remove('hidden');
+    pinBtn.classList.remove('hidden');
+    pinBtn.textContent = n.pinned ? 'Unpin' : 'Pin';
+  } else {
+    document.getElementById('noteEditorTitle').textContent = 'New Note';
+    titleEl.value = '';
+    bodyEl.innerHTML = '';
+    personSel.value = '';
+    deleteBtn.classList.add('hidden');
+    pinBtn.classList.add('hidden');
+  }
+
+  renderNoteTagSelector();
+  modal.classList.remove('hidden');
+  titleEl.focus();
+}
+
+function renderNoteTagSelector() {
+  const container = document.getElementById('noteTagSelector');
+  const allTags = getAllTags();
+  const noteTags = editingNoteId && notes[editingNoteId] ? (notes[editingNoteId].tags || []) : [];
+
+  container.innerHTML = allTags.map(t => {
+    const sel = noteTags.includes(t) ? ' selected' : '';
+    return '<span class="tag-chip' + sel + '" data-tag="' + escHtml(t) + '" onclick="toggleEditorTag(this)">' + escHtml(t) + '</span>';
+  }).join('');
+}
+
+function toggleEditorTag(el) {
+  el.classList.toggle('selected');
+}
+
+function getSelectedEditorTags() {
+  const chips = document.querySelectorAll('#noteTagSelector .tag-chip.selected');
+  return Array.from(chips).map(c => c.getAttribute('data-tag'));
+}
+
+function execFmt(cmd) {
+  document.execCommand(cmd, false, null);
+  document.getElementById('noteEditBody').focus();
+}
+
+function closeNoteEditor() {
+  document.getElementById('noteEditorModal').classList.add('hidden');
+  editingNoteId = null;
+}
+
+function closeNoteEditorBackdrop(e) {
+  if (e.target === e.currentTarget) closeNoteEditor();
+}
+
+function saveNote() {
+  const title = document.getElementById('noteEditTitle').value.trim();
+  const body = document.getElementById('noteEditBody').innerHTML;
+  const bodyPlain = stripHtml(body);
+  const personId = document.getElementById('noteEditPerson').value || null;
+  const tags = getSelectedEditorTags();
+
+  if (!title && !bodyPlain) {
+    showToast('Please enter a title or content');
+    return;
+  }
+
+  const now = new Date().toISOString();
+
+  if (editingNoteId && notes[editingNoteId]) {
+    const n = notes[editingNoteId];
+    n.title = title;
+    n.body = body;
+    n.bodyPlain = bodyPlain;
+    n.tags = tags;
+    n.personId = personId;
+    n.updatedAt = now;
+  } else {
+    const id = generateId('n');
+    notes[id] = {
+      id, title, body, bodyPlain, tags, personId,
+      createdAt: now, updatedAt: now, pinned: false
+    };
+  }
+
+  saveNotes();
+  closeNoteEditor();
+  if (currentPage === 'notes') renderNotesList();
+  else if (currentPage === 'home') renderHome();
+  showToast('Note saved');
+}
+
+async function deleteNote() {
+  if (!editingNoteId) return;
+  const ok = await showConfirm('Delete this note?');
+  if (!ok) return;
+  delete notes[editingNoteId];
+  saveNotes();
+  closeNoteEditor();
+  if (currentPage === 'notes') renderNotesList();
+  else if (currentPage === 'home') renderHome();
+  showToast('Note deleted');
+}
+
+function toggleNotePin() {
+  if (!editingNoteId || !notes[editingNoteId]) return;
+  notes[editingNoteId].pinned = !notes[editingNoteId].pinned;
+  notes[editingNoteId].updatedAt = new Date().toISOString();
+  saveNotes();
+  document.getElementById('notePinBtn').textContent = notes[editingNoteId].pinned ? 'Unpin' : 'Pin';
+  showToast(notes[editingNoteId].pinned ? 'Note pinned' : 'Note unpinned');
+}
+
+// ================================================================
+// PEOPLE — LIST
+// ================================================================
+function setPeopleCategory(cat) {
+  currentPeopleCategory = cat;
+  document.querySelectorAll('#peopleTabs .tab-btn').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-cat') === cat);
+  });
+  renderPeopleList();
+}
+
+function renderPeopleList() {
+  const query = (document.getElementById('peopleSearch').value || '').toLowerCase().trim();
+  const container = document.getElementById('peopleList');
+
+  let arr = Object.values(people).filter(p => !p.archived);
+
+  // Filter by category
+  if (currentPeopleCategory !== 'all') {
+    arr = arr.filter(p => p.category === currentPeopleCategory);
+  }
+
+  // Filter by search
+  if (query) {
+    arr = arr.filter(p =>
+      (p.name || '').toLowerCase().includes(query) ||
+      (p.role || '').toLowerCase().includes(query)
+    );
+  }
+
+  // Sort alphabetically
+  arr.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+  if (arr.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9787;</div><p>' +
+      (query ? 'No matching people' : 'No people yet. Tap + to add someone.') +
+      '</p></div>';
+    return;
+  }
+
+  container.innerHTML = arr.map(p => {
+    const initials = getInitials(p.name);
+    const detail = p.role || (CATEGORY_LABELS[p.category] || '');
+    const catClass = 'cat-' + (p.category || 'members');
+    return '<div class="person-card" onclick="openPersonDetail(\'' + p.id + '\')">' +
+      '<div class="person-avatar">' + initials + '</div>' +
+      '<div class="person-info">' +
+        '<div class="person-name">' + escHtml(p.name) + '</div>' +
+        '<div class="person-detail">' + escHtml(detail) + '</div>' +
+      '</div>' +
+      '<span class="category-badge ' + catClass + '">' + (CATEGORY_LABELS[p.category] || '') + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+// ================================================================
+// PEOPLE — EDITOR
+// ================================================================
+let editingPersonId = null;
+
+function openPersonEditor(personId) {
+  editingPersonId = personId || null;
+  const deleteBtn = document.getElementById('personDeleteBtn');
+
+  if (personId && people[personId]) {
+    const p = people[personId];
+    document.getElementById('personEditorTitle').textContent = 'Edit Person';
+    document.getElementById('personEditName').value = p.name || '';
+    document.getElementById('personEditPhone').value = p.phone || '';
+    document.getElementById('personEditEmail').value = p.email || '';
+    document.getElementById('personEditCategory').value = p.category || 'members';
+    document.getElementById('personEditRole').value = p.role || '';
+    document.getElementById('personEditNotes').value = p.notes || '';
+    document.getElementById('personEditOrdinance').value = p.ordinanceGoal || '';
+    document.getElementById('personEditOrdinanceNotes').value = p.ordinanceNotes || '';
+    deleteBtn.classList.remove('hidden');
+  } else {
+    document.getElementById('personEditorTitle').textContent = 'New Person';
+    document.getElementById('personEditName').value = '';
+    document.getElementById('personEditPhone').value = '';
+    document.getElementById('personEditEmail').value = '';
+    document.getElementById('personEditCategory').value = 'ministering';
+    document.getElementById('personEditRole').value = '';
+    document.getElementById('personEditNotes').value = '';
+    document.getElementById('personEditOrdinance').value = '';
+    document.getElementById('personEditOrdinanceNotes').value = '';
+    deleteBtn.classList.add('hidden');
+  }
+
+  document.getElementById('personEditorModal').classList.remove('hidden');
+  document.getElementById('personEditName').focus();
+}
+
+function closePersonEditor() {
+  document.getElementById('personEditorModal').classList.add('hidden');
+  editingPersonId = null;
+}
+
+function closePersonEditorBackdrop(e) {
+  if (e.target === e.currentTarget) closePersonEditor();
+}
+
+function savePerson() {
+  const name = document.getElementById('personEditName').value.trim();
+  if (!name) {
+    showToast('Please enter a name');
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const personData = {
+    name,
+    phone: document.getElementById('personEditPhone').value.trim(),
+    email: document.getElementById('personEditEmail').value.trim(),
+    category: document.getElementById('personEditCategory').value,
+    role: document.getElementById('personEditRole').value.trim(),
+    notes: document.getElementById('personEditNotes').value.trim(),
+    ordinanceGoal: document.getElementById('personEditOrdinance').value || null,
+    ordinanceNotes: document.getElementById('personEditOrdinanceNotes').value.trim(),
+    updatedAt: now
+  };
+
+  if (editingPersonId && people[editingPersonId]) {
+    Object.assign(people[editingPersonId], personData);
+  } else {
+    const id = generateId('p');
+    people[id] = {
+      id, ...personData,
+      addedAt: now, archived: false
+    };
+  }
+
+  savePeople();
+  closePersonEditor();
+  if (currentPage === 'people') renderPeopleList();
+  else if (currentPage === 'ordinances') renderOrdinancesList();
+  else if (currentPage === 'home') renderHome();
+  showToast('Person saved');
+}
+
+async function deletePerson() {
+  if (!editingPersonId) return;
+  const ok = await showConfirm('Delete this person? Their linked notes will be unlinked.');
+  if (!ok) return;
+
+  // Unlink notes
+  Object.values(notes).forEach(n => {
+    if (n.personId === editingPersonId) n.personId = null;
+  });
+  saveNotes();
+
+  delete people[editingPersonId];
+  savePeople();
+  closePersonEditor();
+  closePersonDetail();
+  if (currentPage === 'people') renderPeopleList();
+  else if (currentPage === 'ordinances') renderOrdinancesList();
+  else if (currentPage === 'home') renderHome();
+  showToast('Person deleted');
+}
+
+// ================================================================
+// PEOPLE — DETAIL VIEW
+// ================================================================
+function openPersonDetail(personId) {
+  const p = people[personId];
+  if (!p) return;
+
+  const container = document.getElementById('personDetailContent');
+  const initials = getInitials(p.name);
+  const catLabel = CATEGORY_LABELS[p.category] || '';
+
+  let contactRows = '';
+  if (p.phone) {
+    contactRows += '<div class="person-contact-row"><span class="contact-icon">&#128222;</span><a href="tel:' + escHtml(p.phone) + '">' + escHtml(p.phone) + '</a></div>';
+  }
+  if (p.email) {
+    contactRows += '<div class="person-contact-row"><span class="contact-icon">&#9993;</span><a href="mailto:' + escHtml(p.email) + '">' + escHtml(p.email) + '</a></div>';
+  }
+  if (!p.phone && !p.email) {
+    contactRows = '<div class="person-contact-row"><span style="color:var(--text-dim);font-size:0.82rem;">No contact info</span></div>';
+  }
+
+  // Ordinance goal
+  let ordinanceSection = '';
+  if (p.ordinanceGoal) {
+    ordinanceSection = '<div class="person-section-title">Ordinance Goal</div>' +
+      '<div style="margin-bottom:4px;font-size:0.9rem;font-weight:600;color:var(--accent)">' + (ORDINANCE_LABELS[p.ordinanceGoal] || p.ordinanceGoal) + '</div>' +
+      (p.ordinanceNotes ? '<div style="font-size:0.82rem;color:var(--text-dim);white-space:pre-wrap;">' + escHtml(p.ordinanceNotes) + '</div>' : '');
+  }
+
+  // Notes
+  let notesSection = '';
+  if (p.notes) {
+    notesSection = '<div class="person-section-title">Notes</div>' +
+      '<div class="person-notes-text">' + escHtml(p.notes) + '</div>';
+  }
+
+  // Linked notes
+  const linked = Object.values(notes).filter(n => n.personId === personId && !n.archived);
+  let linkedSection = '';
+  if (linked.length > 0) {
+    linked.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    linkedSection = '<div class="person-section-title">Linked Notes (' + linked.length + ')</div>' +
+      linked.map(n => '<div class="linked-note-mini" onclick="closePersonDetail();openNoteEditor(\'' + n.id + '\')">' +
+        '<div class="ln-title">' + escHtml(n.title || 'Untitled') + '</div>' +
+        '<div class="ln-preview">' + escHtml((n.bodyPlain || '').substring(0, 80)) + '</div>' +
+      '</div>').join('');
+  }
+
+  container.innerHTML =
+    '<div class="person-detail-header">' +
+      '<div class="person-detail-avatar">' + initials + '</div>' +
+      '<div class="person-detail-info">' +
+        '<div class="pd-name">' + escHtml(p.name) + '</div>' +
+        '<div class="pd-category">' + catLabel + (p.role ? ' &middot; ' + escHtml(p.role) : '') + '</div>' +
+      '</div>' +
+    '</div>' +
+    contactRows +
+    ordinanceSection +
+    notesSection +
+    linkedSection;
+
+  document.getElementById('personDetailEditBtn').onclick = () => {
+    closePersonDetail();
+    openPersonEditor(personId);
+  };
+
+  document.getElementById('personDetailModal').classList.remove('hidden');
+}
+
+function closePersonDetail() {
+  document.getElementById('personDetailModal').classList.add('hidden');
+}
+
+function closePersonDetailBackdrop(e) {
+  if (e.target === e.currentTarget) closePersonDetail();
+}
+
+// ================================================================
+// ORDINANCES PAGE
+// ================================================================
+function renderOrdinancesList() {
+  const container = document.getElementById('ordinancesList');
+  let arr = Object.values(people).filter(p => !p.archived && p.ordinanceGoal);
+
+  // Sort by name
+  arr.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+  if (arr.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9733;</div><p>No ordinance goals set yet.<br>Add one from a person\'s profile.</p></div>';
+    return;
+  }
+
+  container.innerHTML = arr.map(p => {
+    const goalLabel = ORDINANCE_LABELS[p.ordinanceGoal] || p.ordinanceGoal;
+    return '<div class="ordinance-card" onclick="openPersonEditor(\'' + p.id + '\')">' +
+      '<div class="ord-name">' + escHtml(p.name) + '</div>' +
+      '<div class="ord-goal">' + escHtml(goalLabel) + '</div>' +
+      (p.ordinanceNotes ? '<div class="ord-notes">' + escHtml(p.ordinanceNotes) + '</div>' : '') +
+    '</div>';
+  }).join('');
+}
+
+// ================================================================
+// HOME DASHBOARD
+// ================================================================
+function renderHome() {
+  const noteArr = Object.values(notes).filter(n => !n.archived);
+  const peopleArr = Object.values(people).filter(p => !p.archived);
+  const ordinanceCount = peopleArr.filter(p => p.ordinanceGoal).length;
+
+  // Notes this week
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  const notesThisWeek = noteArr.filter(n => new Date(n.updatedAt) > weekAgo).length;
+
+  // Stats
+  document.getElementById('homeStats').innerHTML =
+    '<div class="stat-card"><div class="stat-value">' + peopleArr.length + '</div><div class="stat-label">People</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + noteArr.length + '</div><div class="stat-label">Notes</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + notesThisWeek + '</div><div class="stat-label">Notes This Week</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + ordinanceCount + '</div><div class="stat-label">Ordinance Goals</div></div>';
+
+  // Recent notes (last 5)
+  const recent = [...noteArr].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).slice(0, 5);
+  const recentContainer = document.getElementById('homeRecentNotes');
+  if (recent.length === 0) {
+    recentContainer.innerHTML = '<div style="color:var(--text-dim);font-size:0.82rem;padding:8px 0;">No notes yet</div>';
+  } else {
+    recentContainer.innerHTML = recent.map(n =>
+      '<div class="home-recent-item" onclick="openNoteEditor(\'' + n.id + '\')">' +
+        '<span class="hri-icon">&#9998;</span>' +
+        '<span class="hri-text">' + escHtml(n.title || 'Untitled') + '</span>' +
+        '<span class="hri-date">' + timeAgo(n.updatedAt) + '</span>' +
+      '</div>'
+    ).join('');
+  }
+
+  // Ordinance goals
+  const ordPeople = peopleArr.filter(p => p.ordinanceGoal).slice(0, 5);
+  const ordContainer = document.getElementById('homeOrdinances');
+  if (ordPeople.length === 0) {
+    ordContainer.innerHTML = '<div style="color:var(--text-dim);font-size:0.82rem;padding:8px 0;">No goals set</div>';
+  } else {
+    ordContainer.innerHTML = ordPeople.map(p =>
+      '<div class="home-recent-item" onclick="openPersonEditor(\'' + p.id + '\')">' +
+        '<span class="hri-icon">&#9733;</span>' +
+        '<span class="hri-text">' + escHtml(p.name) + ' — ' + (ORDINANCE_LABELS[p.ordinanceGoal] || p.ordinanceGoal) + '</span>' +
+      '</div>'
+    ).join('');
+  }
+}
+
+// ================================================================
+// SETTINGS
+// ================================================================
+function renderSettings() {
+  // Tags
+  const list = document.getElementById('tagManageList');
+  list.innerHTML = (wmSettings.customTags || []).map(t =>
+    '<span class="tag-chip">' + escHtml(t) +
+    '<span class="tag-remove" onclick="removeCustomTag(\'' + escHtml(t) + '\')">&times;</span></span>'
+  ).join('');
+}
+
+function addCustomTag() {
+  const input = document.getElementById('newTagInput');
+  const tag = input.value.trim().toLowerCase().replace(/[^a-z0-9\-_]/g, '');
+  if (!tag) return;
+  if (!wmSettings.customTags) wmSettings.customTags = [];
+  if (wmSettings.customTags.includes(tag)) {
+    showToast('Tag already exists');
+    return;
+  }
+  wmSettings.customTags.push(tag);
+  saveSettings();
+  input.value = '';
+  renderSettings();
+  showToast('Tag added');
+}
+
+async function removeCustomTag(tag) {
+  const ok = await showConfirm('Remove tag "' + tag + '"? It will be removed from all notes.');
+  if (!ok) return;
+  wmSettings.customTags = (wmSettings.customTags || []).filter(t => t !== tag);
+  // Remove from notes
+  Object.values(notes).forEach(n => {
+    if (n.tags) n.tags = n.tags.filter(t => t !== tag);
+  });
+  saveNotes();
+  saveSettings();
+  renderSettings();
+  showToast('Tag removed');
+}
+
+function exportData() {
+  const exportObj = { notes, people, settings: wmSettings, exportedAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'ward-mission-backup-' + todayStr() + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Data exported');
+}
+
+async function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const ok = await showConfirm('Import data? This will merge with your existing data.');
+  if (!ok) { event.target.value = ''; return; }
+
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+
+    if (data.notes) {
+      Object.assign(notes, data.notes);
+      saveNotes();
+    }
+    if (data.people) {
+      Object.assign(people, data.people);
+      savePeople();
+    }
+    if (data.settings && data.settings.customTags) {
+      const merged = new Set([...(wmSettings.customTags || []), ...data.settings.customTags]);
+      wmSettings.customTags = [...merged];
+      saveSettings();
+    }
+
+    switchPage(currentPage);
+    showToast('Data imported');
+  } catch(e) {
+    showToast('Invalid JSON file');
+  }
+  event.target.value = '';
+}
+
+async function clearAllData() {
+  const ok = await showConfirm('Delete ALL data? This cannot be undone.');
+  if (!ok) return;
+
+  notes = {};
+  people = {};
+  saveNotes();
+  savePeople();
+  switchPage('home');
+  showToast('All data cleared');
+}
+
+// ================================================================
+// INIT
+// ================================================================
+function initApp() {
+  switchPage('home');
+}
+
+// ================================================================
+// SERVICE WORKER
+// ================================================================
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// ================================================================
+// AUTH
+// ================================================================
+document.getElementById('googleSignInBtn').addEventListener('click', async () => {
+  const errEl = document.getElementById('authError');
+  const loadEl = document.getElementById('authLoading');
+  errEl.classList.add('hidden');
+  loadEl.classList.remove('hidden');
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    await auth.signInWithPopup(provider);
+  } catch(err) {
+    console.error('Sign-in error:', err);
+    loadEl.classList.add('hidden');
+    errEl.textContent = err.message || 'Sign-in failed';
+    errEl.classList.remove('hidden');
+  }
+});
+
+document.getElementById('signOutBtn').addEventListener('click', async () => {
+  const ok = await showConfirm('Sign out? Your data is saved in the cloud.');
+  if (!ok) return;
+  firestoreSyncEnabled = false;
+  currentUser = null;
+  await auth.signOut();
+  document.getElementById('authOverlay').classList.remove('hidden');
+});
+
+function updateAccountUI(user) {
+  if (!user) return;
+  const photo = document.getElementById('accountPhoto');
+  const name = document.getElementById('accountName');
+  const email = document.getElementById('accountEmail');
+  photo.src = user.photoURL || '';
+  photo.style.display = user.photoURL ? '' : 'none';
+  name.textContent = user.displayName || 'User';
+  email.textContent = user.email || '';
+}
+
+auth.onAuthStateChanged(async (user) => {
+  if (user) {
+    currentUser = user;
+    document.getElementById('authLoading').classList.add('hidden');
+
+    const result = await loadFromFirestore(user.uid);
+    firestoreSyncEnabled = true;
+    updateAccountUI(user);
+    document.getElementById('authOverlay').classList.add('hidden');
+
+    initApp();
+
+    if (result === 'loaded') {
+      showToast('Data loaded from cloud');
+    }
+  } else {
+    currentUser = null;
+    firestoreSyncEnabled = false;
+    document.getElementById('authOverlay').classList.remove('hidden');
+  }
+});
+</script>
+</body>
+</html>
